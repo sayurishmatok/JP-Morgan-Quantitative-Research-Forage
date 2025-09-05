@@ -1,1 +1,1 @@
-# JP-Morgan-Quantitative-Research-Forage
+JP-Morgan-Quantitative-Research-Forage

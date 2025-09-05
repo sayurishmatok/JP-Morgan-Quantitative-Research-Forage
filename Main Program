@@ -1,0 +1,121 @@
+import csv
+from datetime import datetime, timedelta
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+#Task 1 Regression on Natural Gas Data
+datearray = []
+pricearray = []
+            
+def getDataFromCsv():
+    with open('/Users/sayurishmatok/Library/CloudStorage/OneDrive-UniversityCollegeLondon/Careers/naturalgas.csv', 'r') as csvfile:
+        rows = csv.reader(csvfile)
+        for row in rows:
+            date_obj = datetime.strptime(row[0], '%m/%d/%y')
+            datearray.append(date_obj)
+            pricearray.append(float(row[1]))
+    return datearray, pricearray
+            
+            
+dates, prices = getDataFromCsv()
+
+date_ordinals = np.array([d.toordinal() for d in dates])
+prices_array = np.array(prices)
+
+# Fit a polynomial regression (degree 3 captures some nonlinearity)
+degree = 3
+coefficients = np.polyfit(date_ordinals, prices_array, degree)
+poly = np.poly1d(coefficients)
+
+# Prepare dates for plotting and extrapolation (1 year beyond last date)
+last_date = dates[-1]
+future_days = 365
+extended_dates = [last_date + timedelta(days=i) for i in range(future_days + 1)]
+extended_ordinals = np.array([d.toordinal() for d in extended_dates])
+
+# Calculate predicted prices (regression + extrapolation)
+predicted_prices = poly(extended_ordinals)
+
+# Plot historical data points
+plt.scatter(dates, prices, label='Historical Prices', color='blue')
+
+# Plot regression + extrapolation curve
+plt.plot(extended_dates, predicted_prices, label='Polynomial Regression (degree 3)', color='red')
+
+plt.xlabel('Date')
+plt.ylabel('Price')
+plt.title('Natural Gas Prices with Polynomial Regression Extrapolation')
+plt.legend()
+plt.show()
+
+# Function to estimate price for any date (string or datetime)
+def estimate_price(date_input):
+    if isinstance(date_input, str):
+        date_input = datetime.strptime(date_input, '%m-%d-%y')
+    date_num = date_input.toordinal()
+    
+    # Optional: limit estimation to a reasonable range (+/- 1 year from data)
+    min_date = dates[0] - timedelta(days=365)
+    max_date = dates[-1] + timedelta(days=365)
+    if not (min_date.toordinal() <= date_num <= max_date.toordinal()):
+        raise ValueError("Date outside of interpolation/extrapolation range.")
+    
+    return float(poly(date_num))
+
+
+#Task 2 Storage Option Valuation Problem- optimizing when to inject or withdraw gas to maximize contract value
+
+def contractvalue(injectiondates, withdrawaldates, injectionwithdrawal_rate, max_volume, storage_cost):
+    start_date = min(*injectiondates, *withdrawaldates) #inject earliest from client
+    end_date = max(*injectiondates, *withdrawaldates) #withdraw latest from client
+
+    volume = 0 #injected volume
+    profit = 0
+    
+    current = start_date
+    while current <= end_date:
+        pricetoday = estimate_price(current)
+        
+        #check if inject
+        if current in injectiondates:
+            volume_available = max_volume - volume 
+            if injectionwithdrawal_rate < volume_available:
+                inject = injectionwithdrawal_rate
+            else: # dont need elif volume_available > 0 as if its 0 inject is  0
+                inject = volume_available
+
+            volume += inject #dont need if statement here because if its 0 multiplied by 0 is 0 cost
+            costofinject = pricetoday * inject
+            profit = profit - costofinject #SUM CASH FLOWS 
+            
+            
+        #check if withdraw
+        if current in withdrawaldates:
+            volume_available = max_volume - volume
+            if injectionwithdrawal_rate < volume_available:
+                withdraw = injectionwithdrawal_rate
+            else:
+                withdraw = volume_available
+                
+            volume -= withdraw
+            revenueofwithdraw = pricetoday * withdraw
+            profit = profit + revenueofwithdraw #withdraw = sell so profit goes UP
+                
+                
+        #Storage costs per volume per day
+        storagecost = volume * storage_cost
+        profit -= storagecost
+        
+        #move to next day
+        current_date += timedelta(days=1)
+        
+    return profit 
+        
+injectiondates = [] #can be ANY set of dates
+withdrawaldates = [] #can be ANY set of dates
+price = estimate_price(injectiondates)
+
+value = contractvalue(injectiondates, withdrawaldates, price, injection_rate, max_volume, storage_cost)
+print(f"Estimated contract value: {value:.2f}")
+#injection date, price for that date to buy from other function above, same for withdrawal to sell
